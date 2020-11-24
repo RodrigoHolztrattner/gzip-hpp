@@ -4,50 +4,44 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED on)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/mason.cmake)
+include(FetchContent)
 
-option(WERROR "Add -Werror flag to build (turns warnings into errors)" ON)
+SET(CMAKE_CXX_FLAGS "/Zi /sdl /Oi /Gy /permissive- /MP /GR /TP /EHsc")                     # TODO: /GR should be active only on editor mode
+SET(CMAKE_CXX_FLAGS_DEBUG "/ZI /sdl /JMC /permissive- /MP /GR /TP /EHsc /MDd /Od /bigobj") # TODO: /GR should be active only on editor mode
 
-# configure optimization
-if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(OPTIMIZATION_FLAGS "-O0 -DDEBUG")
-    message("-- Configuring debug build")
-else()
-    set(OPTIMIZATION_FLAGS "-O3 -DNDEBUG")
-    message("-- Configuring release build")
+# LIB DATA COMPRESSION LIBRARY
+FetchContent_Declare(
+  zlib
+  GIT_REPOSITORY https://github.com/RodrigoHolztrattner/zlib
+)
+
+FetchContent_GetProperties(zlib)
+if(NOT zlib_POPULATED)
+  FetchContent_Populate(zlib)
+
+     # Generate the sources.
+     execute_process(COMMAND ${CMAKE_COMMAND} -G "${CMAKE_GENERATOR}" -DCMAKE_INSTALL_PREFIX:PATH=${PACKAGES_ROOT}
+     WORKING_DIRECTORY "${zlib_SOURCE_DIR}")
+
+    # Build and install.
+    execute_process(COMMAND ${CMAKE_COMMAND} --build . --target install WORKING_DIRECTORY "${zlib_SOURCE_DIR}") 
 endif()
 
-# Enable extra warnings to adhere to https://github.com/mapbox/cpp/issues/37
-set(DESIRED_WARNINGS "-Wall -Wextra -Wconversion -Wunreachable-code -Wuninitialized -pedantic-errors -Wold-style-cast -Wno-error=unused-variable -Wshadow -Wfloat-equal")
+set(PROJECT_NAME "gzip")
 
-# Note: -D_GLIBCXX_USE_CXX11_ABI=0 is needed to support mason packages that are precompiled libs
-# Currently we only depend on a header only library, but this will help avoid issues when more libs are added via mason
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OPTIMIZATION_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0 ${DESIRED_WARNINGS}")
+project(PROJECT_NAME)
 
-if (WERROR)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
-endif()
+file (GLOB_RECURSE HEADER_FILES "include/gzip"/*.hpp "include/gzip"/*.h) 
 
-# mason_use is a mason function within the mason.cmake file and provides ready-to-go vars, like "STATIC_LIBS" and "INCLUDE_DIRS"
-mason_use(catch VERSION 1.9.6 HEADER_ONLY)
-include_directories(SYSTEM ${MASON_PACKAGE_catch_INCLUDE_DIRS})
+add_library(${PROJECT_NAME} STATIC ${HEADER_FILES} "src/includes.cpp")
 
-mason_use(benchmark VERSION 1.3.0)
-include_directories(SYSTEM ${MASON_PACKAGE_benchmark_INCLUDE_DIRS})
-
-mason_use(zlib VERSION 1.2.8)
-include_directories(SYSTEM ${MASON_PACKAGE_zlib_INCLUDE_DIRS})
+include_directories(${PROJECT_NAME} ${zlib_SOURCE_DIR})
 
 include_directories("${PROJECT_SOURCE_DIR}/include")
 
-file(GLOB TEST_SOURCES test/*.cpp)
-add_executable(unit-tests ${TEST_SOURCES})
+target_link_libraries(${PROJECT_NAME} zlib)
 
-# libbenchmark.a supports threads and therefore needs pthread support
-find_package(Threads REQUIRED)
-file(GLOB BENCH_SOURCES bench/*.cpp)
-add_executable(bench-tests ${BENCH_SOURCES})
-
-# link zlib static library to the unit-tests binary so the tests know where to find the zlib impl code
-target_link_libraries(unit-tests ${MASON_PACKAGE_zlib_STATIC_LIBS})
-target_link_libraries(bench-tests ${MASON_PACKAGE_benchmark_STATIC_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${MASON_PACKAGE_zlib_STATIC_LIBS})
+# Request C++ 20
+set_target_properties(${PROJECT_NAME} PROPERTIES
+  CXX_STANDARD 20
+  CXX_STANDARD_REQUIRED ON)
