@@ -29,7 +29,7 @@ endif()
 
 set(PROJECT_NAME "gzip")
 
-project(PROJECT_NAME)
+project(${PROJECT_NAME})
 
 file (GLOB_RECURSE HEADER_FILES "include/gzip"/*.hpp "include/gzip"/*.h) 
 
